@@ -216,7 +216,7 @@
         <dependency>
             <groupId>me.carleslc.Simple-YAML</groupId>
             <artifactId>Simple-Yaml</artifactId>
-            <version>1.8.1</version>
+            <version>1.8.4</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
@@ -237,12 +237,12 @@
             <version>1.20.4-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
-        <dependency>
-            <groupId>org.bukkit</groupId>
-            <artifactId>craftbukkit</artifactId>
-            <version>1.20.4-R0.1-SNAPSHOT</version>
-            <scope>provided</scope>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>org.bukkit</groupId>-->
+<!--            <artifactId>craftbukkit</artifactId>-->
+<!--            <version>1.20.4-R0.1-SNAPSHOT</version>-->
+<!--            <scope>provided</scope>-->
+<!--        </dependency>-->
         <dependency>
             <groupId>com.twelvemonkeys.imageio</groupId>
             <artifactId>imageio-webp</artifactId>

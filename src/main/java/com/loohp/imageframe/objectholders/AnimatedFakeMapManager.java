@@ -90,177 +90,183 @@ public class AnimatedFakeMapManager implements Listener, Runnable {
 
     private List<Player> getEntityTrackers(Entity entity) {
         try {
-            return ProtocolLibrary.getProtocolManager().getEntityTrackers(entity);
+            return Collections.emptyList();
+//            return ProtocolLibrary.getProtocolManager().getEntityTrackers(entity);
         } catch (IllegalArgumentException e) {
             return Collections.emptyList();
         }
     }
 
     public void run() {
-        Map<ItemFrame, FutureTask<Optional<ItemFrameInfo>>> entityTrackers = new HashMap<>();
-        if (ImageFrame.handleAnimatedMapsOnMainThread) {
+        try {
+            Map<ItemFrame, FutureTask<Optional<ItemFrameInfo>>> entityTrackers = new HashMap<>();
+            if (ImageFrame.handleAnimatedMapsOnMainThread) {
+//                for (Map.Entry<ItemFrame, Holder<AnimationData>> entry : itemFrames.entrySet()) {
+//                    ItemFrame itemFrame = entry.getKey();
+//                    FutureTask<Optional<ItemFrameInfo>> future = new FutureTask<>(() -> {
+//                        if (!itemFrame.isValid()) {
+//                            return Optional.empty();
+//                        }
+//                        return Optional.of(new ItemFrameInfo(getEntityTrackers(itemFrame), itemFrame.getItem()));
+//                    });
+//                    Scheduler.executeOrScheduleSync(ImageFrame.plugin, future, itemFrame);
+//                    Bukkit.getRegionScheduler().run(ImageFrame.plugin,itemFrame.getLocation(),task->entityTrackers.put(itemFrame, future));
+//                }
+
+            }
+            Map<Player, List<FakeItemUtils.ItemFrameUpdateData>> updateData = new HashMap<>();
             for (Map.Entry<ItemFrame, Holder<AnimationData>> entry : itemFrames.entrySet()) {
                 ItemFrame itemFrame = entry.getKey();
-                FutureTask<Optional<ItemFrameInfo>> future = new FutureTask<>(() -> {
+                FutureTask<Optional<ItemFrameInfo>> future = entityTrackers.get(itemFrame);
+                ItemStack itemStack;
+                List<Player> players;
+                if (future == null) {
                     if (!itemFrame.isValid()) {
-                        return Optional.empty();
-                    }
-                    return Optional.of(new ItemFrameInfo(getEntityTrackers(itemFrame), itemFrame.getItem()));
-                });
-                Scheduler.executeOrScheduleSync(ImageFrame.plugin, future, itemFrame);
-                entityTrackers.put(itemFrame, future);
-            }
-
-        }
-        Map<Player, List<FakeItemUtils.ItemFrameUpdateData>> updateData = new HashMap<>();
-        for (Map.Entry<ItemFrame, Holder<AnimationData>> entry : itemFrames.entrySet()) {
-            ItemFrame itemFrame = entry.getKey();
-            FutureTask<Optional<ItemFrameInfo>> future = entityTrackers.get(itemFrame);
-            ItemStack itemStack;
-            List<Player> players;
-            if (future == null) {
-                if (!itemFrame.isValid()) {
-                    itemFrames.remove(itemFrame);
-                    continue;
-                }
-                players = getEntityTrackers(itemFrame);
-                itemStack = itemFrame.getItem();
-            } else {
-                List<Player> syncPlayers;
-                ItemStack syncItemStack;
-                try {
-                    Optional<ItemFrameInfo> result = future.get(30, TimeUnit.SECONDS);
-                    if (!result.isPresent()) {
+                        itemFrames.remove(itemFrame);
                         continue;
                     }
-                    ItemFrameInfo info = result.get();
-                    syncPlayers = info.getTrackedPlayers();
-                    syncItemStack = info.getItemStack();
-                } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                    e.printStackTrace();
-                    syncPlayers = Collections.emptyList();
-                    syncItemStack = ITEM_EMPTY;
-                }
-                players = syncPlayers;
-                itemStack = syncItemStack;
-            }
-            Holder<AnimationData> holder = entry.getValue();
-            AnimationData animationData = holder.getValue();
-            MapView mapView = MapUtils.getItemMapView(itemStack);
-            if (mapView == null) {
-                holder.setValue(AnimationData.EMPTY);
-                continue;
-            }
-            if (animationData.isEmpty() || !animationData.getMapView().equals(mapView)) {
-                ImageMap map = ImageFrame.imageMapManager.getFromMapView(mapView);
-                if (map == null || !map.requiresAnimationService()) {
-                    if (!animationData.isEmpty()) {
-                        holder.setValue(AnimationData.EMPTY);
+                    players = getEntityTrackers(itemFrame);
+                    itemStack = null;
+                } else {
+                    List<Player> syncPlayers;
+                    ItemStack syncItemStack;
+                    try {
+                        Optional<ItemFrameInfo> result = future.get(30, TimeUnit.SECONDS);
+                        if (!result.isPresent()) {
+                            continue;
+                        }
+                        ItemFrameInfo info = result.get();
+                        syncPlayers = info.getTrackedPlayers();
+                        syncItemStack = info.getItemStack();
+                    } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                        e.printStackTrace();
+                        syncPlayers = Collections.emptyList();
+                        syncItemStack = ITEM_EMPTY;
                     }
-                    continue;
+                    players = syncPlayers;
+                    itemStack = syncItemStack;
                 }
-                holder.setValue(animationData = new AnimationData(map, mapView, map.getMapViews().indexOf(mapView)));
-            } else if (!animationData.isEmpty()) {
-                if (!animationData.getImageMap().isValid()) {
-                    for (Player player : players) {
-                        FakeItemUtils.sendFakeItemChange(player, itemFrame, itemStack);
-                    }
+                Holder<AnimationData> holder = entry.getValue();
+                AnimationData animationData = holder.getValue();
+                MapUtils.getItemMapView(null);
+                MapView mapView = null;
+                if (mapView == null) {
                     holder.setValue(AnimationData.EMPTY);
                     continue;
                 }
-            }
-            ImageMap imageMap = animationData.getImageMap();
-            if (!imageMap.requiresAnimationService()) {
-                holder.setValue(AnimationData.EMPTY);
-                continue;
-            }
-            int index = animationData.getIndex();
-            int currentPosition = imageMap.getCurrentPositionInSequence();
-            int mapId = imageMap.getAnimationFakeMapId(currentPosition, index);
-            if (mapId < 0) {
-                continue;
-            }
-            Set<Player> requiresSending = new HashSet<>();
-            Set<Player> needReset = new HashSet<>();
-            Iterator<Player> itr = players.iterator();
-            while (itr.hasNext()) {
-                Player player = itr.next();
-                MapMarkerEditManager.MapMarkerEditData edit = ImageFrame.mapMarkerEditManager.getActiveEditing(player);
-                if (edit != null && Objects.equals(edit.getImageMap(), imageMap)) {
-                    needReset.add(player);
-                    itr.remove();
+                if (animationData.isEmpty() || !animationData.getMapView().equals(mapView)) {
+                    ImageMap map = ImageFrame.imageMapManager.getFromMapView(mapView);
+                    if (map == null || !map.requiresAnimationService()) {
+                        if (!animationData.isEmpty()) {
+                            holder.setValue(AnimationData.EMPTY);
+                        }
+                        continue;
+                    }
+                    holder.setValue(animationData = new AnimationData(map, mapView, map.getMapViews().indexOf(mapView)));
+                } else if (!animationData.isEmpty()) {
+                    if (!animationData.getImageMap().isValid()) {
+                        for (Player player : players) {
+                            FakeItemUtils.sendFakeItemChange(player, itemFrame, itemStack);
+                        }
+                        holder.setValue(AnimationData.EMPTY);
+                        continue;
+                    }
+                }
+                ImageMap imageMap = animationData.getImageMap();
+                if (!imageMap.requiresAnimationService()) {
+                    holder.setValue(AnimationData.EMPTY);
                     continue;
                 }
-                Set<Integer> knownIds = knownMapIds.get(player);
-                Set<Integer> pendingKnownIds = pendingKnownMapIds.get(player);
-                if (knownIds != null && !knownIds.contains(mapId)) {
-                    if (pendingKnownIds != null && !pendingKnownIds.contains(mapId)) {
-                        pendingKnownIds.addAll(imageMap.getFakeMapIds());
-                        requiresSending.add(player);
+                int index = animationData.getIndex();
+                int currentPosition = imageMap.getCurrentPositionInSequence();
+                int mapId = imageMap.getAnimationFakeMapId(currentPosition, index);
+                if (mapId < 0) {
+                    continue;
+                }
+                Set<Player> requiresSending = new HashSet<>();
+                Set<Player> needReset = new HashSet<>();
+                Iterator<Player> itr = players.iterator();
+                while (itr.hasNext()) {
+                    Player player = itr.next();
+                    MapMarkerEditManager.MapMarkerEditData edit = ImageFrame.mapMarkerEditManager.getActiveEditing(player);
+                    if (edit != null && Objects.equals(edit.getImageMap(), imageMap)) {
+                        needReset.add(player);
+                        itr.remove();
+                        continue;
                     }
-                    itr.remove();
+                    Set<Integer> knownIds = knownMapIds.get(player);
+                    Set<Integer> pendingKnownIds = pendingKnownMapIds.get(player);
+                    if (knownIds != null && !knownIds.contains(mapId)) {
+                        if (pendingKnownIds != null && !pendingKnownIds.contains(mapId)) {
+                            pendingKnownIds.addAll(imageMap.getFakeMapIds());
+                            requiresSending.add(player);
+                        }
+                        itr.remove();
+                    }
+                }
+                if (!requiresSending.isEmpty()) {
+                    imageMap.sendAnimationFakeMaps(requiresSending, (p, i, r) -> {
+                        Set<Integer> pendingKnownIds = pendingKnownMapIds.get(p);
+                        if (pendingKnownIds != null && pendingKnownIds.remove(i) && r) {
+                            Set<Integer> knownIds = knownMapIds.get(p);
+                            if (knownIds != null) {
+                                knownIds.add(i);
+                            }
+                        }
+                    });
+                }
+                if (!needReset.isEmpty()) {
+                    FakeItemUtils.ItemFrameUpdateData itemFrameUpdateData = new FakeItemUtils.ItemFrameUpdateData(itemFrame, itemFrame.getItem(), mapView.getId(), mapView, currentPosition);
+                    needReset.forEach(p -> updateData.computeIfAbsent(p, k -> new ArrayList<>()).add(itemFrameUpdateData));
+                }
+                FakeItemUtils.ItemFrameUpdateData itemFrameUpdateData = new FakeItemUtils.ItemFrameUpdateData(itemFrame, getMapItem(mapId), mapView.getId(), mapView, currentPosition);
+                players.forEach(p -> updateData.computeIfAbsent(p, k -> new ArrayList<>()).add(itemFrameUpdateData));
+            }
+            Map<Player, List<Runnable>> sendingTasks = new HashMap<>();
+            for (Map.Entry<Player, List<FakeItemUtils.ItemFrameUpdateData>> entry : updateData.entrySet()) {
+                Player player = entry.getKey();
+                if (ImageFrame.ifPlayerManager.getIFPlayer(player.getUniqueId()).getPreference(IFPlayerPreference.VIEW_ANIMATED_MAPS, BooleanState.class).getCalculatedValue(() -> ImageFrame.getPreferenceUnsetValue(player, IFPlayerPreference.VIEW_ANIMATED_MAPS).getRawValue(true))) {
+                    if (ImageFrame.viaHook && ViaHook.isPlayerLegacy(player)) {
+                        if (!ImageFrame.viaDisableSmoothAnimationForLegacyPlayers) {
+                            List<FakeItemUtils.ItemFrameUpdateData> list = entry.getValue();
+                            for (FakeItemUtils.ItemFrameUpdateData data : list) {
+                                sendingTasks.computeIfAbsent(player, k -> new ArrayList<>()).add(() -> MapUtils.sendImageMap(data.getRealMapId(), data.getMapView(), data.getCurrentPosition(), Collections.singleton(player), true));
+                            }
+                        }
+                    } else {
+                        sendingTasks.computeIfAbsent(player, k -> new ArrayList<>()).add(() -> FakeItemUtils.sendFakeItemChange(player, entry.getValue()));
+                    }
                 }
             }
-            if (!requiresSending.isEmpty()) {
-                imageMap.sendAnimationFakeMaps(requiresSending, (p, i, r) -> {
-                    Set<Integer> pendingKnownIds = pendingKnownMapIds.get(p);
-                    if (pendingKnownIds != null && pendingKnownIds.remove(i) && r) {
-                        Set<Integer> knownIds = knownMapIds.get(p);
-                        if (knownIds != null) {
-                            knownIds.add(i);
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                if (ImageFrame.ifPlayerManager.getIFPlayer(player.getUniqueId()).getPreference(IFPlayerPreference.VIEW_ANIMATED_MAPS, BooleanState.class).getCalculatedValue(() -> ImageFrame.getPreferenceUnsetValue(player, IFPlayerPreference.VIEW_ANIMATED_MAPS).getRawValue(true))) {
+                    ItemStack mainhand = player.getEquipment().getItemInMainHand();
+                    ItemStack offhand = player.getEquipment().getItemInOffHand();
+                    MapView mainHandView = MapUtils.getItemMapView(mainhand);
+                    MapView offhandView = MapUtils.getItemMapView(offhand);
+                    if (mainHandView != null) {
+                        ImageMap mainHandMap = ImageFrame.imageMapManager.getFromMapView(mainHandView);
+                        if (mainHandMap != null && mainHandMap.requiresAnimationService()) {
+                            sendingTasks.computeIfAbsent(player, k -> new ArrayList<>()).add(() -> mainHandMap.send(player));
                         }
                     }
-                });
-            }
-            if (!needReset.isEmpty()) {
-                FakeItemUtils.ItemFrameUpdateData itemFrameUpdateData = new FakeItemUtils.ItemFrameUpdateData(itemFrame, itemFrame.getItem(), mapView.getId(), mapView, currentPosition);
-                needReset.forEach(p -> updateData.computeIfAbsent(p, k -> new ArrayList<>()).add(itemFrameUpdateData));
-            }
-            FakeItemUtils.ItemFrameUpdateData itemFrameUpdateData = new FakeItemUtils.ItemFrameUpdateData(itemFrame, getMapItem(mapId), mapView.getId(), mapView, currentPosition);
-            players.forEach(p -> updateData.computeIfAbsent(p, k -> new ArrayList<>()).add(itemFrameUpdateData));
-        }
-        Map<Player, List<Runnable>> sendingTasks = new HashMap<>();
-        for (Map.Entry<Player, List<FakeItemUtils.ItemFrameUpdateData>> entry : updateData.entrySet()) {
-            Player player = entry.getKey();
-            if (ImageFrame.ifPlayerManager.getIFPlayer(player.getUniqueId()).getPreference(IFPlayerPreference.VIEW_ANIMATED_MAPS, BooleanState.class).getCalculatedValue(() -> ImageFrame.getPreferenceUnsetValue(player, IFPlayerPreference.VIEW_ANIMATED_MAPS).getRawValue(true))) {
-                if (ImageFrame.viaHook && ViaHook.isPlayerLegacy(player)) {
-                    if (!ImageFrame.viaDisableSmoothAnimationForLegacyPlayers) {
-                        List<FakeItemUtils.ItemFrameUpdateData> list = entry.getValue();
-                        for (FakeItemUtils.ItemFrameUpdateData data : list) {
-                            sendingTasks.computeIfAbsent(player, k -> new ArrayList<>()).add(() -> MapUtils.sendImageMap(data.getRealMapId(), data.getMapView(), data.getCurrentPosition(), Collections.singleton(player), true));
+                    if (offhandView != null && !offhandView.equals(mainHandView)) {
+                        ImageMap offHandMap = ImageFrame.imageMapManager.getFromMapView(offhandView);
+                        if (offHandMap != null && offHandMap.requiresAnimationService()) {
+                            sendingTasks.computeIfAbsent(player, k -> new ArrayList<>()).add(() -> offHandMap.send(player));
                         }
                     }
-                } else {
-                    sendingTasks.computeIfAbsent(player, k -> new ArrayList<>()).add(() -> FakeItemUtils.sendFakeItemChange(player, entry.getValue()));
                 }
             }
-        }
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            if (ImageFrame.ifPlayerManager.getIFPlayer(player.getUniqueId()).getPreference(IFPlayerPreference.VIEW_ANIMATED_MAPS, BooleanState.class).getCalculatedValue(() -> ImageFrame.getPreferenceUnsetValue(player, IFPlayerPreference.VIEW_ANIMATED_MAPS).getRawValue(true))) {
-                ItemStack mainhand = player.getEquipment().getItemInMainHand();
-                ItemStack offhand = player.getEquipment().getItemInOffHand();
-                MapView mainHandView = MapUtils.getItemMapView(mainhand);
-                MapView offhandView = MapUtils.getItemMapView(offhand);
-                if (mainHandView != null) {
-                    ImageMap mainHandMap = ImageFrame.imageMapManager.getFromMapView(mainHandView);
-                    if (mainHandMap != null && mainHandMap.requiresAnimationService()) {
-                        sendingTasks.computeIfAbsent(player, k -> new ArrayList<>()).add(() -> mainHandMap.send(player));
-                    }
+            if (ImageFrame.sendAnimatedMapsOnMainThread) {
+                for (Map.Entry<Player, List<Runnable>> entry : sendingTasks.entrySet()) {
+                    Scheduler.runTask(ImageFrame.plugin, () -> entry.getValue().forEach(Runnable::run), entry.getKey());
                 }
-                if (offhandView != null && !offhandView.equals(mainHandView)) {
-                    ImageMap offHandMap = ImageFrame.imageMapManager.getFromMapView(offhandView);
-                    if (offHandMap != null && offHandMap.requiresAnimationService()) {
-                        sendingTasks.computeIfAbsent(player, k -> new ArrayList<>()).add(() -> offHandMap.send(player));
-                    }
-                }
+            } else {
+                sendingTasks.values().forEach(l -> l.forEach(Runnable::run));
             }
-        }
-        if (ImageFrame.sendAnimatedMapsOnMainThread) {
-            for (Map.Entry<Player, List<Runnable>> entry : sendingTasks.entrySet()) {
-                Scheduler.runTask(ImageFrame.plugin, () -> entry.getValue().forEach(Runnable::run), entry.getKey());
-            }
-        } else {
-            sendingTasks.values().forEach(l -> l.forEach(Runnable::run));
+        } catch (Exception e) {
+
         }
     }
 
